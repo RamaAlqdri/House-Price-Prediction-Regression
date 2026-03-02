@@ -1,0 +1,22 @@
+# OS files
+.DS_Store
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Local datasets
+house_prices.csv
+house-price-ml/data/raw/*.csv
+!house-price-ml/data/raw/.gitkeep
+
+# Model artifacts and generated reports
+house-price-ml/models/*.joblib
+house-price-ml/reports/*.csv
+house-price-ml/reports/*.json
+!house-price-ml/reports/.gitkeep
+
