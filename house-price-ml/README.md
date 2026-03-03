@@ -87,6 +87,29 @@ python -m src.predict --model models/model.joblib --input data/raw/new_data.csv 
 Output:
 - File `reports/predictions.csv` berisi semua kolom input + kolom baru `prediction`.
 
+## Notebook Analisis (Statistik + Grafik)
+
+Notebook visual tersedia di:
+- `notebooks/house_price_e2e_review.ipynb`
+
+Tujuan notebook:
+- Menampilkan statistik deskriptif data (numerik/kategorikal)
+- Visualisasi missing values
+- Visualisasi distribusi target (histogram + boxplot)
+- Perbandingan metrik model (bar chart MAE/RMSE/R2)
+- Plot actual vs predicted dan residual
+- Plot feature importance (jika model mendukung)
+- Review ringkas kualitas model + saran peningkatan
+
+Cara jalankan:
+```bash
+cd house-price-ml
+source .venv/bin/activate
+jupyter notebook notebooks/house_price_e2e_review.ipynb
+```
+
+Jika tidak menggunakan Jupyter Notebook, file `.ipynb` tetap bisa dibuka langsung dari VS Code.
+
 ## Validasi Kolom Saat Prediksi
 
 Script prediksi memeriksa apakah kolom minimal yang dipakai saat training tersedia pada data baru.
