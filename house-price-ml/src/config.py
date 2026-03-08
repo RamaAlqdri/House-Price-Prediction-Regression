@@ -13,7 +13,7 @@ RAW_DATA_PATH = DATA_RAW_DIR / "houses.csv"
 MODEL_PATH = MODELS_DIR / "model.joblib"
 METRICS_PATH = REPORTS_DIR / "metrics.json"
 
-TARGET_COLUMN = "price"
+TARGET_COLUMN = "Price (in rupees)"
 RANDOM_STATE = 42
 TEST_SIZE = 0.2
 

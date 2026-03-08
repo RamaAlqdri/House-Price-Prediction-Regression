@@ -1,22 +1,38 @@
 # House Price ML (End-to-End Regression)
 
-Project ini melatih model regresi untuk prediksi harga rumah dari file CSV, mengevaluasi performa model, menyimpan model terbaik, dan melakukan prediksi pada data baru.
+Repositori ini berisi pipeline machine learning untuk prediksi harga rumah dari data tabular campuran (numerik + kategorikal + teks angka). Fokus project ini adalah reproducible workflow: mulai dari data loading, preprocessing, training beberapa model, evaluasi metrik, simpan model terbaik, sampai prediksi data baru.
 
-## Struktur Folder
+## 1. Tujuan Project
+
+Tujuan utama:
+- Membuat model regresi untuk memprediksi `Price (in rupees)`.
+- Menyediakan pipeline training dan inference yang konsisten.
+- Menyediakan notebook analisis untuk statistik data, visualisasi, dan review performa.
+
+Output utama:
+- `models/model.joblib`: artifact model terbaik + metadata.
+- `reports/metrics.json`: ringkasan metrik train/test semua model kandidat.
+- `reports/predictions.csv` atau `reports/predictions_from_notebook.csv`: hasil prediksi.
+
+## 2. Struktur Folder
 
 ```text
 house-price-ml/
 ├─ data/
 │  ├─ raw/
-│  │  └─ houses.csv
+│  │  ├─ houses.csv
+│  │  ├─ _sample_200.csv
+│  │  └─ new_data.csv (opsional)
 │  └─ processed/
 ├─ models/
 │  └─ model.joblib
 ├─ reports/
 │  ├─ metrics.json
-│  └─ predictions.csv
+│  ├─ predictions.csv
+│  └─ predictions_from_notebook.csv
+├─ notebooks/
+│  └─ house_price_e2e_review.ipynb
 ├─ src/
-│  ├─ __init__.py
 │  ├─ config.py
 │  ├─ data.py
 │  ├─ train.py
@@ -26,125 +42,252 @@ house-price-ml/
 └─ README.md
 ```
 
-## Prasyarat
-
-- Python 3.9+ (disarankan 3.10+)
-- `pip`
-
-## Setup Environment
+## 3. Setup Environment
 
 Jalankan dari root project `house-price-ml`:
 
 ```bash
 cd house-price-ml
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-Jika di mesin kamu perintah `python` tidak tersedia, gunakan `python3`.
+Jika command `python` tersedia, kamu juga bisa pakai `python` menggantikan `python3`.
 
-## Dataset
+## 4. Konfigurasi Dasar
 
-- Default data training: `data/raw/houses.csv`
-- Default target: `price`
+Lihat `src/config.py`:
+- `TARGET_COLUMN = "Price (in rupees)"`
+- `RANDOM_STATE = 42`
+- `TEST_SIZE = 0.2`
+- Path default data/model/metrics.
 
-Jika kolom target di dataset kamu bukan `price`, jalankan training dengan `--target <nama_kolom_target>`.
+Artinya secara default:
+- Data training: `data/raw/houses.csv`
+- Target prediksi: `Price (in rupees)`
+- Split data: 80% train, 20% test
 
-## Training
+## 5. Alur Machine Learning dari Awal sampai Akhir
 
-Contoh command:
+### 5.1 Definisi Problem
+
+Problem yang diselesaikan adalah **supervised learning - regression**:
+- Input: fitur properti (lokasi, luas, status, furnishing, dll).
+- Output: nilai target kontinu `Price (in rupees)`.
+
+### 5.2 Data Loading dan Validasi Dasar
+
+Di `src/data.py`:
+- File CSV dibaca dengan `load_data()`.
+- Jika file tidak ada atau dataset kosong, proses dihentikan dengan error jelas.
+
+### 5.3 Cleaning Target
+
+Sebelum training:
+- Target dipaksa menjadi numerik (`_coerce_target_to_numeric`).
+- Nilai target yang kosong/tidak valid dibuang.
+- Jumlah baris yang dibuang dilaporkan ke log.
+
+Kenapa ini penting:
+- Model regresi hanya bisa dilatih pada target numerik valid.
+- Membersihkan target di awal menghindari error dan metrik menyesatkan.
+
+### 5.4 Split Train/Test (Stratified Quantile)
+
+`split_data()` melakukan:
+- Pemisahan train/test.
+- Stratifikasi berdasarkan quantile target (jika memungkinkan) untuk menjaga distribusi target train/test lebih seimbang.
+
+Kenapa ini penting:
+- Pada data harga rumah, distribusi sering skewed dan punya outlier.
+- Stratifikasi membantu evaluasi lebih stabil dibanding split acak biasa.
+
+### 5.5 Feature Engineering
+
+Masih di `src/data.py` (`HouseFeatureEngineer`):
+- Parsing teks angka ke numerik:
+  - `Amount(in rupees)` (mis. Lac/Cr -> nilai numerik)
+  - `Carpet Area`, `Super Area` (konversi satuan luas ke sqft)
+  - `Floor`, `Bathroom`, `Balcony`, `Car Parking` (ekstraksi angka)
+- Drop kolom noisy/high-cardinality:
+  - `Title`, `Description`, `Index`
+
+Tujuan:
+- Mengurangi sparsity dan overfitting dari teks bebas.
+- Meningkatkan kualitas sinyal numerik yang lebih robust.
+
+### 5.6 Preprocessing
+
+`build_preprocessor()` membangun pipeline campuran:
+- Fitur numerik:
+  - imputer median
+  - standard scaler
+- Fitur kategorikal:
+  - imputer most-frequent
+  - one-hot encoding (`handle_unknown='ignore'`)
+
+Pipeline ini dipasang di semua model kandidat agar preprocessing konsisten.
+
+### 5.7 Model Kandidat
+
+Di `src/train.py`, model yang dilatih:
+- `dummy_median`: baseline sederhana (prediksi median target).
+- `linear_regression`: baseline linear.
+- `random_forest`: ensemble tree.
+- `random_forest_log_target`: random forest dengan transformasi target `log1p`.
+- `gradient_boosting`: boosting tree.
+
+### 5.8 Evaluasi
+
+Metrik di `src/utils.py`:
+- **MAE**: rata-rata error absolut.
+- **RMSE**: akar dari rata-rata kuadrat error (lebih sensitif outlier).
+- **R2**: proporsi variasi target yang dijelaskan model.
+
+Aturan baca cepat:
+- MAE lebih kecil lebih baik.
+- RMSE lebih kecil lebih baik.
+- R2 lebih besar lebih baik (mendekati 1 ideal; <= 0 berarti lemah).
+
+### 5.9 Seleksi Model dan Simpan Artifact
+
+Model terbaik dipilih berdasarkan **test RMSE terendah**.
+
+Disimpan ke:
+- `models/model.joblib`: berisi pipeline terlatih + metadata (`feature_columns`, `target_column`, dll).
+- `reports/metrics.json`: metrik detail semua kandidat.
+
+### 5.10 Inference (Prediksi Data Baru)
+
+Di `src/predict.py`:
+- Load artifact model.
+- Validasi kolom input agar sesuai kolom training.
+- Jalankan `pipeline.predict()`.
+- Simpan output CSV dengan kolom baru `prediction`.
+
+## 6. Cara Menjalankan
+
+### 6.1 Training via Script
 
 ```bash
-python -m src.train --data data/raw/houses.csv --target price
+cd house-price-ml
+source .venv/bin/activate
+python -m src.train --data data/raw/houses.csv --target "Price (in rupees)"
 ```
 
-Output training:
-- Melatih 3 model kandidat:
-  - `linear_regression` (baseline)
-  - `random_forest`
-  - `gradient_boosting`
-- Membersihkan target ke numerik; baris dengan target kosong/tidak valid akan dibuang otomatis.
-- Mengabaikan fitur yang 100% missing saat training.
-- Evaluasi train & test dengan metrik:
-  - MAE
-  - RMSE
-  - R2
-- Memilih model terbaik berdasarkan **RMSE test terendah**.
-- Menyimpan:
-  - Model terbaik: `models/model.joblib`
-  - Ringkasan metrik: `reports/metrics.json`
-
-## Prediksi Data Baru
-
-Contoh command:
+### 6.2 Prediksi via Script
 
 ```bash
-python -m src.predict --model models/model.joblib --input data/raw/new_data.csv --output reports/predictions.csv
+cd house-price-ml
+source .venv/bin/activate
+python -m src.predict \
+  --model models/model.joblib \
+  --input data/raw/new_data.csv \
+  --output reports/predictions.csv
 ```
 
-Output:
-- File `reports/predictions.csv` berisi semua kolom input + kolom baru `prediction`.
+### 6.3 Analisis via Notebook
 
-## Notebook Analisis (Statistik + Grafik)
-
-Notebook visual tersedia di:
-- `notebooks/house_price_e2e_review.ipynb`
-
-Tujuan notebook:
-- Menampilkan statistik deskriptif data (numerik/kategorikal)
-- Visualisasi missing values
-- Visualisasi distribusi target (histogram + boxplot)
-- Perbandingan metrik model (bar chart MAE/RMSE/R2)
-- Plot actual vs predicted dan residual
-- Plot feature importance (jika model mendukung)
-- Review ringkas kualitas model + saran peningkatan
-
-Cara jalankan:
 ```bash
 cd house-price-ml
 source .venv/bin/activate
 jupyter notebook notebooks/house_price_e2e_review.ipynb
 ```
 
-Jika tidak menggunakan Jupyter Notebook, file `.ipynb` tetap bisa dibuka langsung dari VS Code.
+Notebook mencakup:
+- statistik deskriptif
+- visualisasi missing values
+- distribusi target
+- perbandingan metrik model
+- residual analysis
+- feature importance (jika model mendukung)
+- review otomatis hasil
 
-## Validasi Kolom Saat Prediksi
+## 7. Penjelasan Hasil (Snapshot `reports/metrics.json` Saat Ini)
 
-Script prediksi memeriksa apakah kolom minimal yang dipakai saat training tersedia pada data baru.
+Ringkasan data:
+- Total baris: **187,531**
+- Baris dipakai training/testing: **169,866**
+- Baris dibuang (target invalid): **17,665**
+- Test size: **20%**
 
-Jika ada kolom yang kurang, script akan gagal dengan error jelas, misalnya:
-- "Input CSV is missing required feature columns from training..."
+Ranking performa test (lebih kecil RMSE lebih baik):
 
-## Konfigurasi
+| Model | Test MAE | Test RMSE | Test R2 |
+|---|---:|---:|---:|
+| random_forest | 2,383.50 | 44,349.58 | 0.0060 |
+| random_forest_log_target | 2,328.47 | 44,387.97 | 0.0043 |
+| dummy_median | 3,495.36 | 44,519.84 | -0.0016 |
+| linear_regression | 1,020.20 | 44,722.75 | -0.0108 |
+| gradient_boosting | 2,555.23 | 44,857.56 | -0.0169 |
 
-Lihat `src/config.py` untuk default path dan parameter utama:
-- `TARGET_COLUMN`
-- `RANDOM_STATE`
-- `TEST_SIZE`
-- path model/report
+Model terpilih saat snapshot ini:
+- **Best model: `random_forest`**
+- Alasan: punya test RMSE terendah pada file metrik saat ini.
 
-## Troubleshooting
+Interpretasi:
+- Nilai **R2 test sangat rendah** (mendekati 0), artinya model baru menjelaskan sedikit variasi data test.
+- Gap train-test pada beberapa model masih menunjukkan indikasi generalisasi belum kuat.
+- Problem ini kemungkinan dipengaruhi kombinasi outlier target, keragaman data tinggi, dan fitur kategorikal besar.
 
-1. Error target column tidak ada
-- Pastikan nama target benar.
-- Jalankan ulang dengan `--target <nama_kolom_target>`.
+Catatan:
+- Angka di atas adalah snapshot dari file `reports/metrics.json` saat README ini ditulis.
+- Jika kamu menjalankan training ulang, angka dapat berubah.
 
-2. Error file tidak ditemukan
-- Cek path pada argumen `--data`, `--model`, atau `--input`.
-- Pastikan command dijalankan dari folder `house-price-ml`.
+## 8. Cara Membaca File Output
 
-3. Error kolom input tidak cocok saat prediksi
-- Samakan skema kolom data prediksi dengan data training (minimal semua fitur training harus ada).
+### 8.1 `reports/metrics.json`
 
-4. Install dependency gagal
-- Pastikan virtual environment aktif.
-- Ulangi:
-  ```bash
-  pip install --upgrade pip
-  pip install -r requirements.txt
-  ```
+Isi penting:
+- `models.<nama_model>.train/test`: MAE, RMSE, R2.
+- `best_model`: model terbaik berdasarkan metric seleksi.
+- `n_rows_dropped_target_invalid`: indikator kualitas target mentah.
 
-5. `python: command not found`
-- Gunakan `python3` pada semua command (`python3 -m src.train`, `python3 -m src.predict`).
+### 8.2 `models/model.joblib`
+
+Menyimpan:
+- pipeline lengkap (feature engineering + preprocessing + model)
+- daftar fitur training
+- nama target
+- metadata waktu training
+
+### 8.3 `reports/predictions*.csv`
+
+Berisi:
+- seluruh kolom input
+- kolom tambahan `prediction`
+
+Gunakan file ini untuk validasi manual, dashboard, atau integrasi downstream.
+
+## 9. Troubleshooting
+
+1. Error `Target column not found`
+- Pastikan nama kolom target benar.
+- Jalankan dengan `--target "Nama Kolom Target"`.
+
+2. Error `Input CSV is missing required feature columns`
+- Samakan skema kolom file input prediksi dengan skema fitur saat training.
+
+3. Error package/module di notebook
+- Pastikan kernel Jupyter memakai interpreter `.venv` project.
+- Jalankan `%pip install -r ../requirements.txt` dari notebook jika perlu.
+
+4. Hasil test jelek (R2 rendah)
+- Cek kualitas dan konsistensi fitur numerik.
+- Lakukan cross-validation.
+- Coba tuning hyperparameter lebih lanjut.
+
+## 10. Rekomendasi Peningkatan Berikutnya
+
+Prioritas teknis yang disarankan:
+- Tambahkan **cross-validation** (KFold/Stratified by quantile) untuk metrik lebih stabil.
+- Tambahkan **robust handling outlier** pada target (winsorize/capping atau evaluasi pada log-space).
+- Uji model boosting yang lebih kuat (mis. XGBoost/LightGBM/CatBoost jika dependency memungkinkan).
+- Tambahkan eksperimen fitur domain-specific (usia bangunan, jarak fasilitas, dsb jika data tersedia).
+- Simpan run metadata per eksperimen (versi data, parameter, timestamp) agar tracking lebih rapi.
+
+---
+
+Jika kamu mau, saya bisa lanjutkan tahap berikutnya: menambahkan script evaluasi cross-validation + ringkasan leaderboard otomatis per eksperimen ke folder `reports/`.

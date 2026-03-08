@@ -5,10 +5,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
+import numpy as np
 from sklearn.base import clone
 from sklearn.ensemble import GradientBoostingRegressor, RandomForestRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import Pipeline
+from sklearn.compose import TransformedTargetRegressor
+from sklearn.dummy import DummyRegressor
 
 from . import config
 from .data import build_preprocessor, load_data, split_data
@@ -33,15 +36,27 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_model_candidates() -> dict:
+    random_forest = RandomForestRegressor(
+        n_estimators=250,
+        random_state=config.RANDOM_STATE,
+        n_jobs=-1,
+        min_samples_leaf=5,
+        max_features="sqrt",
+    )
+
     return {
+        "dummy_median": DummyRegressor(strategy="median"),
         "linear_regression": LinearRegression(),
-        "random_forest": RandomForestRegressor(
-            n_estimators=300,
-            random_state=config.RANDOM_STATE,
-            n_jobs=-1,
+        "random_forest": random_forest,
+        "random_forest_log_target": TransformedTargetRegressor(
+            regressor=clone(random_forest),
+            func=np.log1p,
+            inverse_func=np.expm1,
+            check_inverse=False,
         ),
         "gradient_boosting": GradientBoostingRegressor(
             random_state=config.RANDOM_STATE,
+            subsample=0.8,
         ),
     }
 
