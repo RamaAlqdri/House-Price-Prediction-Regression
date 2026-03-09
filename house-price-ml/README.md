@@ -205,6 +205,67 @@ Notebook mencakup:
 - feature importance (jika model mendukung)
 - review otomatis hasil
 
+### 6.4 Jalankan Flask API (untuk Frontend)
+
+Pastikan dependency terpasang sesuai `requirements.txt` (terutama `scikit-learn==1.6.1` agar artifact model saat ini bisa di-load).
+
+```bash
+cd house-price-ml
+source .venv/bin/activate
+pip install -r requirements.txt
+python -m src.api --model models/model.joblib --host 0.0.0.0 --port 5000
+```
+
+Endpoint yang tersedia:
+- `GET /health` -> cek status service dan model.
+- `POST /predict` -> prediksi harga rumah.
+
+Contoh request single record:
+
+```json
+{
+  "Amount(in rupees)": "35 Lac",
+  "location": "Kolkata",
+  "Carpet Area": "900 sqft",
+  "Status": "Ready to Move",
+  "Floor": "2 out of 5",
+  "Transaction": "Resale",
+  "Furnishing": "Semi-Furnished",
+  "facing": "East",
+  "overlooking": "Main Road",
+  "Society": "Some Society",
+  "Bathroom": "2",
+  "Balcony": "1",
+  "Car Parking": "1",
+  "Ownership": "Freehold",
+  "Super Area": "1000 sqft",
+  "Title": "sample",
+  "Description": "sample",
+  "Index": 1
+}
+```
+
+Contoh request batch:
+
+```json
+{
+  "instances": [
+    { "...": "record_1" },
+    { "...": "record_2" }
+  ]
+}
+```
+
+Contoh response:
+
+```json
+{
+  "count": 1,
+  "prediction": 3412345.67,
+  "predictions": [3412345.67]
+}
+```
+
 ## 7. Penjelasan Hasil (Snapshot `reports/metrics.json` Saat Ini)
 
 Ringkasan data:
@@ -274,7 +335,11 @@ Gunakan file ini untuk validasi manual, dashboard, atau integrasi downstream.
 - Pastikan kernel Jupyter memakai interpreter `.venv` project.
 - Jalankan `%pip install -r ../requirements.txt` dari notebook jika perlu.
 
-4. Hasil test jelek (R2 rendah)
+4. Error saat load `model.joblib` (`AttributeError` / `InconsistentVersionWarning`)
+- Biasanya karena mismatch versi `scikit-learn` antara training vs inference.
+- Gunakan versi yang dipin di `requirements.txt` (saat ini `scikit-learn==1.6.1`) atau retrain model di environment versi baru lalu simpan ulang artifact.
+
+5. Hasil test jelek (R2 rendah)
 - Cek kualitas dan konsistensi fitur numerik.
 - Lakukan cross-validation.
 - Coba tuning hyperparameter lebih lanjut.
